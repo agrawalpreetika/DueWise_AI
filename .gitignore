@@ -1,0 +1,15 @@
+# Old non-AI app version
+flutter_application_1/
+
+# Environment secrets & API keys
+.env
+.env.*
+!.env.example
+duewise_backend/.env
+
+# Python / FastAPI
+duewise_backend/__pycache__/
+duewise_backend/*.py[cod]
+duewise_backend/.venv/
+duewise_backend/venv/
+duewise_backend/env/
