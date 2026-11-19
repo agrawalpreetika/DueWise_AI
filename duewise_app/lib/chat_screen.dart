@@ -26,6 +26,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   void _handleSubmitted(String text) async {
     if (text.trim().isEmpty) return;
 
@@ -37,6 +43,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
 
     final result = await _aiService.sendMessageToAgent(text);
+
+    if (!mounted) return;
 
     setState(() {
       _isLoading = false;
@@ -132,7 +140,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       } else {
         _messages.add(
           ChatMessage(
-            text: "Sorry, could not connect to the backend server. Please make sure the Python server is running.",
+            text: "Sorry, could not connect to the backend server. Please make sure the backend server is reachable.",
             isUser: false,
           ),
         );
@@ -206,30 +214,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: LinearProgressIndicator(color: Colors.deepPurple),
             ),
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16.0,
-              vertical: 8.0,
-            ),
             color: const Color(0xFF1E1E1E),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    onSubmitted: _handleSubmitted,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'Type a message (e.g., What is due today?)...',
-                      hintStyle: TextStyle(color: Colors.grey),
-                      border: InputBorder.none,
+            child: SafeArea(
+              top: false,
+              bottom: true,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 8.0,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        onSubmitted: _handleSubmitted,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          hintText:
+                              'Type a message (e.g., What is due today?)...',
+                          hintStyle: TextStyle(color: Colors.grey),
+                          border: InputBorder.none,
+                        ),
+                      ),
                     ),
-                  ),
+                    IconButton(
+                      icon: const Icon(Icons.send, color: Colors.deepPurple),
+                      onPressed: () => _handleSubmitted(_controller.text),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.send, color: Colors.deepPurple),
-                  onPressed: () => _handleSubmitted(_controller.text),
-                ),
-              ],
+              ),
             ),
           ),
         ],
