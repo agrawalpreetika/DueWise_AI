@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "382276671542",
+    "project_id": "duewise-app-bc53f",
+    "storage_bucket": "duewise-app-bc53f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:382276671542:android:25c20b0337934f86662097",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "382276671542-is79olp4n9ku4lev3nuv01628iuo1h8n.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.flutter_application_1",
+            "certificate_hash": "c1482981bc56e0c9412a94126907cdca8ab900db"
+          }
+        },
+        {
+          "client_id": "382276671542-bpq3lfp9g2ien8dvefk78paq2rdjin3m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwW9h-W7zb2iEfQpvt4RgXUtN5RsG4LWY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "382276671542-bpq3lfp9g2ien8dvefk78paq2rdjin3m.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
