@@ -1,199 +1,292 @@
+# DueWise – Smart Subscription & Bill Tracker
 
-# 🌟 DueWise – Smart Subscription & Bill Tracker
+DueWise is a cross-platform subscription and bill tracking application built with Flutter. It helps users manage recurring subscriptions, one-time bills, payment reminders, and free trials, along with an AI-powered conversational assistant.
 
-> Never miss a payment again! **DueWise** is a cross-platform subscription and bill management application built with **Flutter** and a **Python FastAPI + Groq AI agent**. Track recurring subscriptions, get timely payment reminders, monitor free trials, sync across devices, and manage or query your bills through a conversational AI assistant.
+The application uses Firebase for authentication and cloud synchronization, while a Python FastAPI backend powers the AI assistant using Groq.
 
----
+## Features
 
-## ✨ Key Features
+### 1. Subscription & Bill Management
+- Add and manage recurring subscriptions.
+- Track one-time bills such as electricity, water, and other payments.
+- Choose between Subscription and One-Time Bill modes.
+- Edit existing subscriptions and bills.
+- Mark one-time bills as paid without affecting recurring billing cycles.
+- Track free trials and their conversion dates.
 
-### 🤖 AI Chatbot Assistant (DueWise AI Assistant)
+### 2. AI Chatbot Assistant
 
-Chat naturally in plain English to add subscriptions or inspect your bills without navigating through multiple screens.
+DueWise includes an AI-powered assistant that allows users to manage and query their subscriptions and bills through natural language.
 
-- **Add Subscriptions via Chat (`add_subscription`):** Create new subscriptions using natural language. The assistant extracts the title, amount, billing cycle (`MONTHLY`, `YEARLY`, or `CUSTOM` interval in days), start date, and category (`Entertainment`, `Utilities`, `Software`, `Gym`, `Insurance`, `Education`, `Other`).
+**Supported actions:**
 
-- **Query Bills & Expenses via Chat (`query_subscriptions`):** Ask questions about your existing subscriptions and receive answers based on your subscription data.
+- **Add Subscription (`add_subscription`):** Add recurring subscriptions with a title, amount, billing cycle, start date, and category.
+- **Add One-Time Bill (`add_one_time_bill`):** Add non-recurring bills with a title, amount, category, and due date. These entries do not require a billing cycle or start date.
+- **Query Subscriptions (`query_subscriptions`):** Retrieve information about subscriptions and unpaid one-time bills.
 
-#### Supported Queries & Example Prompts
+**Supported subscription intervals:**
+- `MONTHLY`
+- `YEARLY`
+- `CUSTOM` (specified through interval days)
 
-| Query Type | Example Prompts |
+**Available categories:**
+- Entertainment
+- Utilities
+- Software
+- Gym
+- Insurance
+- Education
+- Other
+
+**Conversational clarification support:**
+
+The chatbot maintains recent conversation history and sends it to the backend through the `history` field. This allows it to understand follow-up responses and continue an ongoing request.
+
+For example:
+1. User: "Add my Netflix subscription."
+2. Assistant: Asks for the amount and billing details.
+3. User: "649 per month."
+4. Assistant: Uses the previous conversation context to complete the request.
+
+**Supported query intents:**
+
+| Intent | Example queries |
 |---|---|
-| Today's Dues (`due_today`) | "What subscriptions are due today?" / "Do I have any bills due today?" |
-| Specific Date Dues (`due_on_date`) | "What subscriptions are due on November 25, 2026?" / "Any bills due on 2026-12-01?" |
-| Upcoming Renewals (`upcoming_days`) | "What are my upcoming subscriptions in the next 7 days?" / "Show me bills due in the next 14 days." |
-| Calendar-Month Expenses (`this_month_expenses`, `next_month_expenses`) | "What are the expenses this month?" / "What are the expenses next month?" |
-| Average Monthly Spend (`monthly_expenses`) | "What are my monthly expenses?" / "How much do I spend per month on subscriptions?" |
-| Category Spending (`by_category`) | "Show my Entertainment subscriptions." / "How much am I spending on Gym?" |
-| Specific Bill / Service Lookup (`by_name`) | "How much is my Spotify subscription?" / "What is my internet bill?" |
-| All Active Subscriptions (`all_active`) | "List all my active subscriptions." |
+| `due_today` | "What subscriptions are due today?" / "Do I have any bills due today?" |
+| `due_on_date` | "What subscriptions are due on November 25, 2026?" |
+| `upcoming_days` | "Show my upcoming subscriptions in the next 7 days." / "Show bills due in the next 14 days." |
+| `this_month_expenses` | "What are my expenses this month?" |
+| `next_month_expenses` | "What are my expenses next month?" |
+| `monthly_expenses` | "How much do I spend per month on subscriptions?" |
+| `by_category` | "Show my Entertainment subscriptions." / "How much am I spending on Gym?" |
+| `by_name` | "How much is my Spotify subscription?" / "What is my internet bill?" |
+| `all_active` | "List all my active subscriptions and unpaid bills." |
 
-### 📱 Core Subscription & Expense Management
+**Expense calculation and filtering:**
+- Paid one-time bills are excluded from active unpaid bill lists.
+- One-time bills are excluded from recurring monthly subscription spend estimates.
+- One-time bills are included in due, upcoming, and monthly calendar views.
 
-- **🔄 Multi-Device Sync:** Synchronizes user data across mobile devices and web clients using Firebase Authentication and Cloud Firestore.
-- **🔔 Smart Payment Reminders:** Schedules local notifications 3 days before, 1 day before, and on the due date, with reminders at 9:00 AM and 6:00 PM.
-- **🎁 Free Trial Tracking:** Highlights active free trials to help users avoid unexpected charges.
-- **📊 Analytics & Payment History:** Displays monthly expense breakdowns, financial insights, and a detailed payment history.
-- **🌙 Dark & Light Themes:** Provides an adaptive interface with theme switching, built using Flutter and Riverpod.
+### 3. Reminders & Notifications
+- Local notifications for upcoming payment dates.
+- Reminders 3 days before, 1 day before, and on the due date.
+- Notifications scheduled at 9 AM and 6 PM.
+
+### 4. Cloud Synchronization
+- Firebase Authentication for user sign-in.
+- Cloud Firestore for storing and synchronizing user data.
+- Multi-device synchronization.
+
+### 5. Analytics & Payment History
+- View subscription spending analytics.
+- Track payment history.
+- Monitor recurring expenses and upcoming bills.
+
+### 6. UI & Experience
+- Dark and light themes.
+- State management using Flutter Riverpod.
+- Local data persistence using Hive.
 
 ---
 
-## 📱 App Screenshots
-
-The screenshots are stored in the `duewise_app/screenshots/` directory.
+## Screenshots
 
 <p align="center">
-  <img src="duewise_app/screenshots/dashboard.jpeg" width="28%" alt="DueWise dashboard" />
-  <img src="duewise_app/screenshots/analytics_light.jpeg" width="28%" alt="Analytics in light theme" />
-  <img src="duewise_app/screenshots/analytics_dark.jpeg" width="28%" alt="Analytics in dark theme" />
+  <img src="duewise_app/screenshots/dashboard.jpeg" width="28%" alt="Dashboard"/>
+  <img src="duewise_app/screenshots/analytics_light.jpeg" width="28%" alt="Analytics Light Mode"/>
+  <img src="duewise_app/screenshots/analytics_dark.jpeg" width="28%" alt="Analytics Dark Mode"/>
 </p>
 
 <p align="center">
-  <img src="duewise_app/screenshots/calender.jpeg" width="28%" alt="Calendar" />
-  <img src="duewise_app/screenshots/history.jpeg" width="28%" alt="Payment history" />
-  <img src="duewise_app/screenshots/profile.jpeg" width="28%" alt="Profile" />
+  <img src="duewise_app/screenshots/calender.jpeg" width="28%" alt="Calendar"/>
+  <img src="duewise_app/screenshots/history.jpeg" width="28%" alt="Payment History"/>
+  <img src="duewise_app/screenshots/profile.jpeg" width="28%" alt="Profile"/>
 </p>
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Category | Technologies |
 |---|---|
-| Frontend | Flutter (Android, iOS, and Web) |
+| Frontend | Flutter, Dart |
 | State Management | Flutter Riverpod |
-| AI / Agent Backend | Python, FastAPI, Pydantic, Groq SDK (`openai/gpt-oss-20b`), Uvicorn |
+| Backend | Python, FastAPI |
+| AI Integration | Groq SDK, `openai/gpt-oss-20b` |
+| Data Validation | Pydantic |
 | Authentication | Firebase Authentication |
 | Cloud Database | Cloud Firestore |
 | Local Storage | Hive |
-| Notifications | `flutter_local_notifications`, `timezone` |
+| Code Generation | build_runner |
+| Notifications | flutter_local_notifications, timezone |
+| Server | Uvicorn |
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
-Follow these steps to set up and run the DueWise Flutter application and Python AI backend locally.
+Follow these steps to set up and run DueWise locally.
 
 ### Prerequisites
 
-Make sure the following tools and accounts are available:
+Make sure you have the following installed:
 
-- [Flutter SDK](https://docs.flutter.dev/get-started/install)
-- [Dart SDK](https://dart.dev/get-dart) (included with Flutter)
-- [Python 3.10+](https://www.python.org/downloads/)
-- [Git](https://git-scm.com/downloads)
-- A [Groq API key](https://console.groq.com/)
-- An IDE such as [VS Code](https://code.visualstudio.com/) or Android Studio
+- Flutter SDK
+- Dart SDK (included with Flutter)
+- Python 3.10+
+- Git
+- VS Code or Android Studio
+- A Groq API key
 
 ### 1. Clone the Repository
-
-Replace the placeholders with your GitHub username and repository name.
 
 ```bash
 git clone https://github.com/<your-username>/<your-repo-name>.git
 cd <your-repo-name>
 ```
 
-### 2. Set Up and Run the Python AI Backend
+### 2. Backend Setup
 
-From the repository root, navigate to the Python backend directory. Replace `<backend_folder>` with the actual directory name in your repository.
+Navigate to the backend directory:
 
 ```bash
 cd <backend_folder>
-
-# Create a virtual environment
-python -m venv venv
-
-# Activate the virtual environment
-
-# Windows:
-venv\Scripts\activate
-
-# macOS / Linux:
-source venv/bin/activate
-
-# Install dependencies
-pip install fastapi uvicorn pydantic python-dotenv groq
 ```
 
-Create a `.env` file in the backend directory and add your Groq API key:
+Create and activate a Python virtual environment.
+
+**Windows:**
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+**macOS / Linux:**
+```bash
+python -m venv venv
+source venv/bin/activate
+```
+
+Install the required dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Create a `.env` file in the backend directory:
 
 ```env
 GROQ_API_KEY=your_groq_api_key_here
 ```
 
-**Important:** Keep your API key private. Do not commit the `.env` file to Git.
+Replace the placeholder with your actual Groq API key.
 
-Start the backend:
+**Important:** Never commit your `.env` file or expose your API key in the repository.
+
+Start the backend server:
 
 ```bash
 python main.py
 ```
 
-The server is configured to run at `http://0.0.0.0:8000`.
+The backend will be available at:
+
+```text
+http://0.0.0.0:8000
+```
 
 **API base URL by environment:**
 
-- Android Emulator: `http://10.0.2.2:8000`
-- Web or iOS Simulator: `http://localhost:8000`
-- Release build: Use your deployed HTTPS backend URL.
+- **Default / Local development:** `http://localhost:8000`
+- **Android emulator:** `http://10.0.2.2:8000`
+- **Deployed backend:** Pass your deployed HTTPS endpoint through `--dart-define=AI_BACKEND_URL=...` when running or building the app.
 
-### 3. Set Up the Flutter Application
+The local URLs work out of the box with the default configuration.
 
-Open a separate terminal. From the repository root, navigate to the Flutter application directory and install its dependencies.
+### 3. Flutter App Setup
+
+Open a new terminal and navigate to the Flutter application directory:
 
 ```bash
 cd <flutter_app_folder>
+```
+
+Install Flutter dependencies:
+
+```bash
 flutter pub get
 ```
 
-Replace `<flutter_app_folder>` with the actual Flutter project directory.
+Generate Hive adapters:
 
-### 4. Configure Firebase
+```bash
+dart run build_runner build --delete-conflicting-outputs
+```
 
-DueWise uses Firebase Authentication and Cloud Firestore. Each developer must configure their own Firebase project before running the application.
+### 4. Firebase Configuration
+
+DueWise uses Firebase Authentication and Cloud Firestore for authentication and cloud data synchronization.
+
+Each developer must configure their own Firebase project.
+
+**Setup steps:**
 
 1. Create a project in the [Firebase Console](https://console.firebase.google.com/).
-2. Register the required application platforms (Android, iOS, and/or Web).
-3. Enable **Firebase Authentication** and configure the sign-in methods used by the app.
-4. Create or enable **Cloud Firestore**.
-5. Install and configure the FlutterFire CLI if it is not already available.
+2. Register your application for the required platforms.
+3. Enable Firebase Authentication and configure the required sign-in methods.
+4. Enable Cloud Firestore.
+5. Install and configure the FlutterFire CLI.
 6. Run the following command from the Flutter project directory:
 
-   ```bash
-   flutterfire configure
-   ```
+```bash
+flutterfire configure
+```
 
-This generates the platform-specific Firebase configuration, including `lib/firebase_options.dart`.
+This generates the `lib/firebase_options.dart` configuration file.
 
-> **Note:** Firebase project configuration is specific to each developer's Firebase project. Anyone setting up the project locally must complete these steps using their own Firebase configuration.
+Make sure your Firebase configuration is correctly set up before running the application.
 
 ### 5. Run the Application
 
-From the Flutter project directory, run:
+From the Flutter project directory, start the application using the default local backend configuration:
 
 ```bash
 flutter run
 ```
 
-To choose a specific connected device:
+To run the application against a deployed backend URL, pass the URL through `--dart-define`:
+
+```bash
+flutter run --dart-define=AI_BACKEND_URL=<your-deployed-url>/api/chat
+```
+
+To select a specific connected device:
 
 ```bash
 flutter devices
 flutter run -d <device_id>
 ```
 
+For a specific device with a deployed backend:
+
+```bash
+flutter run -d <device_id> --dart-define=AI_BACKEND_URL=<your-deployed-url>/api/chat
+```
+
 ---
 
-## 🔐 Configuration & Security
+## Configuration & Security
 
-- Store secrets such as `GROQ_API_KEY` in environment variables or a local `.env` file.
-- Do not commit `.env`, private keys, service-account files, or other credentials.
+- Keep the Groq API key in the backend `.env` file.
+- Never commit API keys, Firebase service account credentials, or other secrets.
+- Keep local backend defaults in the code for convenient development.
+- Pass deployed backend URLs at run or build time using `--dart-define=AI_BACKEND_URL=...` instead of hardcoding production URLs in the repository.
 - Configure Firebase separately for each development environment.
-- Use an HTTPS URL for the deployed backend in release builds.
+- Consider implementing API rate limiting and usage caps for production deployments.
 
 ---
 
-## 💡 Made With
 
-Made with 💖 by **Preetika & Nikki**.
+## Contributors
+
+Made with 💖 by **Preetika & Nikki**

@@ -17,20 +17,20 @@ class SubscriptionAdapter extends TypeAdapter<Subscription> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return Subscription(
-      id: fields[0] as String,
-      title: fields[1] as String,
-      category: fields[2] as String,
-      amount: fields[3] as double,
-      currency: fields[4] as String,
+      id: fields[0] as String? ?? '',
+      title: fields[1] as String? ?? '',
+      category: fields[2] as String? ?? 'Other',
+      amount: (fields[3] as num?)?.toDouble() ?? 0.0,
+      currency: fields[4] as String? ?? 'INR',
       billingCycle: fields[5] as String?,
       customIntervalDays: fields[6] as int?,
       startDate: fields[7] as DateTime?,
-      nextDueDate: fields[8] as DateTime,
-      isFreeTrial: fields[9] as bool,
+      nextDueDate: fields[8] as DateTime? ?? DateTime.now(),
+      isFreeTrial: fields[9] as bool? ?? false,
       trialEndDate: fields[10] as DateTime?,
-      isPaused: fields[11] as bool,
-      entryType: fields[12] as String,
-      isPaid: fields[13] as bool,
+      isPaused: fields[11] as bool? ?? false,
+      entryType: fields[12] as String? ?? 'subscription',
+      isPaid: fields[13] as bool? ?? false,
     );
   }
 
