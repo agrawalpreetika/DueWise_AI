@@ -32,9 +32,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
+  List<Map<String, String>> _buildHistoryPayload() {
+    final recent = _messages.length > 8
+        ? _messages.sublist(_messages.length - 8)
+        : _messages;
+
+    return recent
+        .map(
+          (m) => {'role': m.isUser ? 'user' : 'assistant', 'content': m.text},
+        )
+        .toList();
+  }
+
   void _handleSubmitted(String text) async {
     if (text.trim().isEmpty) return;
 
+    final historyPayload = _buildHistoryPayload();
     _controller.clear();
 
     setState(() {
@@ -42,7 +55,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _isLoading = true;
     });
 
-    final result = await _aiService.sendMessageToAgent(text);
+    final result = await _aiService.sendMessageToAgent(
+      text,
+      history: historyPayload,
+    );
 
     if (!mounted) return;
 
@@ -56,15 +72,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
           try {
             if (functionName == 'add_subscription') {
-              final title = toolData['title'] ?? 'Unknown';
+              final title = toolData['title']?.toString() ?? 'Unknown';
               final amount = (toolData['amount'] as num).toDouble();
               final billingCycle = (toolData['billingCycle'] ?? 'MONTHLY')
                   .toString()
                   .toUpperCase();
               final startDateStr =
-                  toolData['startDate'] ??
+                  toolData['startDate']?.toString() ??
                   DateTime.now().toIso8601String().split('T')[0];
-              final category = toolData['category'] ?? 'Other';
+              final category = toolData['category']?.toString() ?? 'Other';
 
               int? customIntervalDays;
               if (billingCycle == 'CUSTOM' &&
@@ -88,6 +104,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 category: category,
                 amount: amount,
                 currency: 'INR',
+                entryType: 'subscription',
                 billingCycle: billingCycle,
                 customIntervalDays: customIntervalDays,
                 startDate: parsedStartDate,
@@ -95,6 +112,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 isFreeTrial: false,
                 trialEndDate: null,
                 isPaused: false,
+                isPaid: false,
               );
 
               ref
@@ -105,6 +123,43 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ChatMessage(
                   text:
                       "✅ Successfully added '$title' ($category) of ₹$amount ($billingCycle${customIntervalDays != null ? ' - every $customIntervalDays days' : ''})! Next due: ${calculatedDueDate.toIso8601String().split('T')[0]}",
+                  isUser: false,
+                ),
+              );
+            } else if (functionName == 'add_one_time_bill') {
+              final title = toolData['title']?.toString() ?? 'One-Time Bill';
+              final amount = (toolData['amount'] as num).toDouble();
+              final dueDateStr =
+                  toolData['dueDate']?.toString() ??
+                  DateTime.now().toIso8601String().split('T')[0];
+              final category = toolData['category']?.toString() ?? 'Utilities';
+
+              final parsedDueDate =
+                  DateTime.tryParse(dueDateStr) ?? DateTime.now();
+
+              final newBill = Subscription(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                title: title,
+                category: category,
+                amount: amount,
+                currency: 'INR',
+                entryType: 'one_time_bill',
+                billingCycle: null,
+                customIntervalDays: null,
+                startDate: null,
+                nextDueDate: parsedDueDate,
+                isFreeTrial: false,
+                trialEndDate: null,
+                isPaused: false,
+                isPaid: false,
+              );
+
+              ref.read(subscriptionProvider.notifier).addSubscription(newBill);
+
+              _messages.add(
+                ChatMessage(
+                  text:
+                      "✅ Added one-time bill '$title' ($category) of ₹$amount! Pay by: ${parsedDueDate.toIso8601String().split('T')[0]}",
                   isUser: false,
                 ),
               );
@@ -165,7 +220,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     child: Padding(
                       padding: EdgeInsets.all(24.0),
                       child: Text(
-                        "Hello! I am your DueWise AI Assistant.\nYou can say things like:\n\n'Add Netflix subscription of 650 monthly'\n'What subscriptions are due today?'\n'What are my monthly expenses?'",
+                        "Hello! I am your DueWise AI Assistant.\nYou can say things like:\n\n'Add Netflix subscription of 650 monthly'\n'Add electricity bill of 1200 due on 28th'\n'What subscriptions are due today?'",
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white70,

@@ -10,93 +10,125 @@ class FirestoreSyncService {
 
   String? get _userId => _auth.currentUser?.uid;
 
+  // Corrected type definition
   CollectionReference<Map<String, dynamic>>? get _userSubscriptionsRef {
-    if (_userId == null) return null;
-    return _firestore
-        .collection('users')
-        .doc(_userId)
-        .collection('subscriptions');
+    final uid = _userId;
+    if (uid == null) return null;
+    return _firestore.collection('users').doc(uid).collection('subscriptions');
   }
 
-  // Upload or update subscription in Firestore
+  // 1. Upload or update subscription / one-time bill in Firestore
   Future<void> syncSubscription(Subscription subscription) async {
     final ref = _userSubscriptionsRef;
     if (ref == null) return;
 
-    await ref.doc(subscription.id).set({
-      'id': subscription.id,
-      'title': subscription.title,
-      'category': subscription.category,
-      'amount': subscription.amount,
-      'billingCycle': subscription.billingCycle,
-      'customIntervalDays': subscription.customIntervalDays,
-      'startDate': subscription.startDate.toIso8601String(),
-      'nextDueDate': subscription.nextDueDate.toIso8601String(),
-      'isPaused': subscription.isPaused,
-      'isFreeTrial': subscription.isFreeTrial,
-      'trialEndDate': subscription.trialEndDate?.toIso8601String(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    try {
+      await ref.doc(subscription.id).set({
+        'id': subscription.id,
+        'title': subscription.title,
+        'category': subscription.category,
+        'amount': subscription.amount,
+        'currency': subscription.currency,
+        'entryType': subscription.entryType,
+        'billingCycle': subscription.billingCycle,
+        'customIntervalDays': subscription.customIntervalDays,
+        'startDate': subscription.startDate?.toIso8601String(),
+        'nextDueDate': subscription.nextDueDate.toIso8601String(),
+        'isPaused': subscription.isPaused,
+        'isPaid': subscription.isPaid,
+        'isFreeTrial': subscription.isFreeTrial,
+        'trialEndDate': subscription.trialEndDate?.toIso8601String(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      print(
+        'Subscription/bill synced to Firestore successfully: ${subscription.title}',
+      );
+    } catch (e) {
+      print('Error syncing subscription/bill to Firestore: $e');
+    }
   }
 
-  // Delete subscription from Firestore
+  // 2. Delete subscription / one-time bill from Firestore
   Future<void> deleteSubscription(String id) async {
     final ref = _userSubscriptionsRef;
     if (ref == null) return;
 
-    await ref.doc(id).delete();
+    try {
+      await ref.doc(id).delete();
+    } catch (e) {
+      print('Error deleting cloud subscription/bill: $e');
+    }
   }
 
-  // Pull subscriptions from Firestore to populate Hive on fresh login
+  // 3. Pull subscriptions / one-time bills from Firestore to populate Hive on fresh login
   Future<List<Subscription>> fetchCloudSubscriptions() async {
     final ref = _userSubscriptionsRef;
-    if (ref == null) {
-      print(
-        'DEBUG ERROR: _userSubscriptionsRef is NULL! User is not authenticated properly.',
-      );
-      return [];
-    }
+    if (ref == null) return [];
 
     try {
-      print('DEBUG: Fetching subscriptions for User UID: $_userId');
       final snapshot = await ref.get();
-      print(
-        'DEBUG: Successfully fetched ${snapshot.docs.length} documents from cloud.',
-      );
-
       return snapshot.docs.map((doc) {
         final data = doc.data();
+        final entryType =
+            (data['entryType'] as String?)?.trim().toLowerCase() ??
+            'subscription';
+        final isOneTime = entryType == 'one_time_bill';
+
+        final rawStartDate = data['startDate'];
+        DateTime? parsedStartDate;
+        if (!isOneTime && rawStartDate != null) {
+          if (rawStartDate is Timestamp) {
+            parsedStartDate = rawStartDate.toDate();
+          } else if (rawStartDate is String) {
+            parsedStartDate = DateTime.tryParse(rawStartDate);
+          }
+        }
+
+        final rawNextDueDate = data['nextDueDate'];
+        DateTime parsedNextDueDate = DateTime.now();
+        if (rawNextDueDate is Timestamp) {
+          parsedNextDueDate = rawNextDueDate.toDate();
+        } else if (rawNextDueDate is String) {
+          parsedNextDueDate =
+              DateTime.tryParse(rawNextDueDate) ?? DateTime.now();
+        }
+
+        final rawTrialEndDate = data['trialEndDate'];
+        DateTime? parsedTrialEndDate;
+        if (rawTrialEndDate is Timestamp) {
+          parsedTrialEndDate = rawTrialEndDate.toDate();
+        } else if (rawTrialEndDate is String) {
+          parsedTrialEndDate = DateTime.tryParse(rawTrialEndDate);
+        }
+
         return Subscription(
           id: data['id'] ?? doc.id,
           title: data['title'] ?? '',
-          category: data['category'] ?? 'General',
+          category: data['category'] ?? 'Utilities',
           amount: (data['amount'] as num?)?.toDouble() ?? 0.0,
-          billingCycle: data['billingCycle'] ?? 'Monthly',
-          customIntervalDays: data['customIntervalDays'] as int?,
-          startDate: data['startDate'] != null
-              ? DateTime.parse(data['startDate'])
-              : DateTime.now(),
-          nextDueDate: data['nextDueDate'] != null
-              ? DateTime.parse(data['nextDueDate'])
-              : DateTime.now(),
+          currency: (data['currency'] as String?) ?? 'INR',
+          entryType: isOneTime ? 'one_time_bill' : 'subscription',
+          billingCycle: isOneTime
+              ? null
+              : ((data['billingCycle'] as String?) ?? 'MONTHLY'),
+          customIntervalDays: isOneTime
+              ? null
+              : (data['customIntervalDays'] as int?),
+          startDate: parsedStartDate,
+          nextDueDate: parsedNextDueDate,
           isPaused: data['isPaused'] ?? false,
-          isFreeTrial: data['isFreeTrial'] ?? false,
-          trialEndDate: data['trialEndDate'] != null
-              ? DateTime.parse(data['trialEndDate'])
-              : null,
+          isPaid: data['isPaid'] ?? false,
+          isFreeTrial: isOneTime ? false : (data['isFreeTrial'] ?? false),
+          trialEndDate: isOneTime ? null : parsedTrialEndDate,
         );
       }).toList();
     } catch (e) {
-      print(
-        'CRITICAL FIRESTORE FETCH ERROR: $e',
-      ); // Yeh asli error print karega!
+      print('Firestore subscription parsing error: $e');
       return [];
     }
   }
 
-  // Save Payment Log to Firestore
-  // Save Payment Log to Firestore (Guaranteed Collection Creation)
-  // Save Payment Log to Firestore (Guaranteed Collection Creation)
+  // 4. Save Payment Log to Firestore
   Future<void> savePaymentLog(String userId, PaymentLog log) async {
     try {
       await _firestore
@@ -111,30 +143,29 @@ class FirestoreSyncService {
             'amountPaid': log.amountPaid,
             'paidAt': Timestamp.fromDate(log.paidAt),
             'billingPeriod': log.billingPeriod,
-          }, SetOptions(merge: true));
-
-      print('Payment log successfully saved to cloud!');
+          });
+      print('Payment log saved to cloud successfully.');
     } catch (e) {
       print('Error saving payment log to Firestore: $e');
     }
   }
 
-  // Fetch recent payment logs from Firestore (Last 30 Days)
-  // Fetch recent payment logs from Firestore
+  // 5. FETCH RECENT PAYMENT LOGS FROM CLOUD
   Future<List<PaymentLog>> fetchRecentPaymentLogs() async {
-    if (_userId == null) return [];
+    final uid = _userId;
+    if (uid == null) return [];
 
     try {
       final snapshot = await _firestore
           .collection('users')
-          .doc(_userId)
+          .doc(uid)
           .collection('payment_logs')
+          .orderBy('paidAt', descending: true)
           .get();
 
       return snapshot.docs.map((doc) {
         final data = doc.data();
 
-        // Safe Date Parsing
         DateTime parseDate(dynamic dateVal) {
           if (dateVal is Timestamp) {
             return dateVal.toDate();

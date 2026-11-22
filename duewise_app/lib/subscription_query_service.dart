@@ -3,12 +3,23 @@ import 'package:intl/intl.dart';
 import 'features/subscriptions/subscription_model.dart';
 
 class SubscriptionQueryService {
+  static String _cycleDisplayLabel(Subscription s) {
+    if (s.isOneTimeBill) return 'One-Time Bill';
+    final cycle = (s.billingCycle ?? 'MONTHLY').toUpperCase();
+    if (cycle == 'CUSTOM' && (s.customIntervalDays ?? 0) > 0) {
+      return 'CUSTOM (${s.customIntervalDays} days)';
+    }
+    return cycle;
+  }
+
   static String executeQuery({
     required List<Subscription> subscriptions,
     required Map<String, dynamic> queryData,
   }) {
     final queryType = queryData['query_type'] as String? ?? 'all_active';
-    final activeSubs = subscriptions.where((s) => !s.isPaused).toList();
+    final activeSubs = subscriptions
+        .where((s) => !s.isPaused && !(s.isOneTimeBill && s.isPaid))
+        .toList();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final dateFormatter = DateFormat('MMM dd, yyyy');
@@ -25,13 +36,16 @@ class SubscriptionQueryService {
         }).toList();
 
         if (dueToday.isEmpty) {
-          return "You have no subscriptions due today.";
+          return "You have no subscriptions or bills due today.";
         }
         final total = dueToday.fold<double>(0, (sum, s) => sum + s.amount);
         final list = dueToday
-            .map((s) => "• ${s.title} — ₹${s.amount.toStringAsFixed(0)}")
+            .map(
+              (s) =>
+                  "• ${s.title}${s.isOneTimeBill ? ' (One-Time)' : ''} — ₹${s.amount.toStringAsFixed(0)}",
+            )
             .join("\n");
-        return "Subscriptions due today (Total: ₹${total.toStringAsFixed(0)}):\n$list";
+        return "Subscriptions & bills due today (Total: ₹${total.toStringAsFixed(0)}):\n$list";
 
       case 'due_on_date':
         final targetStr = queryData['target_date'] as String?;
@@ -55,13 +69,16 @@ class SubscriptionQueryService {
 
         final formattedDate = dateFormatter.format(targetDay);
         if (matching.isEmpty) {
-          return "No subscriptions are due on $formattedDate.";
+          return "No subscriptions or bills are due on $formattedDate.";
         }
         final total = matching.fold<double>(0, (sum, s) => sum + s.amount);
         final list = matching
-            .map((s) => "• ${s.title} — ₹${s.amount.toStringAsFixed(0)}")
+            .map(
+              (s) =>
+                  "• ${s.title}${s.isOneTimeBill ? ' (One-Time)' : ''} — ₹${s.amount.toStringAsFixed(0)}",
+            )
             .join("\n");
-        return "Subscriptions due on $formattedDate (Total: ₹${total.toStringAsFixed(0)}):\n$list";
+        return "Due on $formattedDate (Total: ₹${total.toStringAsFixed(0)}):\n$list";
 
       case 'upcoming_days':
         final days = (queryData['days_ahead'] as num?)?.toInt() ?? 7;
@@ -77,16 +94,16 @@ class SubscriptionQueryService {
         }).toList()..sort((a, b) => a.nextDueDate.compareTo(b.nextDueDate));
 
         if (upcoming.isEmpty) {
-          return "No subscriptions due in the next $days days.";
+          return "No subscriptions or bills due in the next $days days.";
         }
         final total = upcoming.fold<double>(0, (sum, s) => sum + s.amount);
         final list = upcoming
             .map(
               (s) =>
-                  "• ${s.title} — ₹${s.amount.toStringAsFixed(0)} (${dateFormatter.format(s.nextDueDate)})",
+                  "• ${s.title}${s.isOneTimeBill ? ' (One-Time)' : ''} — ₹${s.amount.toStringAsFixed(0)} (${dateFormatter.format(s.nextDueDate)})",
             )
             .join("\n");
-        return "Upcoming subscriptions in $days days (Total: ₹${total.toStringAsFixed(0)}):\n$list";
+        return "Upcoming in $days days (Total: ₹${total.toStringAsFixed(0)}):\n$list";
 
       case 'this_month_expenses':
         final thisMonthSubs = activeSubs.where((s) {
@@ -96,13 +113,13 @@ class SubscriptionQueryService {
 
         final monthLabel = DateFormat('MMMM yyyy').format(now);
         if (thisMonthSubs.isEmpty) {
-          return "No active subscriptions are due in $monthLabel.";
+          return "No active subscriptions or bills are due in $monthLabel.";
         }
         final total = thisMonthSubs.fold<double>(0, (sum, s) => sum + s.amount);
         final list = thisMonthSubs
             .map(
               (s) =>
-                  "• ${s.title} — ₹${s.amount.toStringAsFixed(0)} (${dateFormatter.format(s.nextDueDate)})",
+                  "• ${s.title}${s.isOneTimeBill ? ' (One-Time)' : ''} — ₹${s.amount.toStringAsFixed(0)} (${dateFormatter.format(s.nextDueDate)})",
             )
             .join("\n");
         return "Expenses due in $monthLabel (Total: ₹${total.toStringAsFixed(0)}):\n$list";
@@ -116,13 +133,13 @@ class SubscriptionQueryService {
 
         final nextMonthLabel = DateFormat('MMMM yyyy').format(nextMonthDate);
         if (nextMonthSubs.isEmpty) {
-          return "No active subscriptions are due in $nextMonthLabel.";
+          return "No active subscriptions or bills are due in $nextMonthLabel.";
         }
         final total = nextMonthSubs.fold<double>(0, (sum, s) => sum + s.amount);
         final list = nextMonthSubs
             .map(
               (s) =>
-                  "• ${s.title} — ₹${s.amount.toStringAsFixed(0)} (${dateFormatter.format(s.nextDueDate)})",
+                  "• ${s.title}${s.isOneTimeBill ? ' (One-Time)' : ''} — ₹${s.amount.toStringAsFixed(0)} (${dateFormatter.format(s.nextDueDate)})",
             )
             .join("\n");
         return "Expenses due in $nextMonthLabel (Total: ₹${total.toStringAsFixed(0)}):\n$list";
@@ -132,9 +149,9 @@ class SubscriptionQueryService {
         int countedSubs = 0;
 
         for (final s in activeSubs) {
-          if (s.isFreeTrial) continue;
+          if (s.isFreeTrial || s.isOneTimeBill) continue;
           countedSubs++;
-          final cycle = s.billingCycle.toUpperCase();
+          final cycle = (s.billingCycle ?? 'MONTHLY').toUpperCase();
           if (cycle == 'MONTHLY') {
             monthlyTotal += s.amount;
           } else if (cycle == 'YEARLY') {
@@ -143,7 +160,7 @@ class SubscriptionQueryService {
             monthlyTotal += (s.amount * 30) / s.customIntervalDays!;
           }
         }
-        return "Your estimated monthly expense is ₹${monthlyTotal.toStringAsFixed(2)} ($countedSubs active paid subscriptions).";
+        return "Your estimated recurring monthly expense is ₹${monthlyTotal.toStringAsFixed(2)} ($countedSubs active recurring subscriptions).";
 
       case 'by_category':
         final rawCat = (queryData['category'] as String? ?? '').toLowerCase();
@@ -157,16 +174,16 @@ class SubscriptionQueryService {
 
         final displayCat = queryData['category'] ?? 'Selected';
         if (filtered.isEmpty) {
-          return "No active subscriptions in the $displayCat category.";
+          return "No active subscriptions or bills in the $displayCat category.";
         }
         final total = filtered.fold<double>(0, (sum, s) => sum + s.amount);
         final list = filtered
             .map(
               (s) =>
-                  "• ${s.title} — ₹${s.amount.toStringAsFixed(0)} (${s.billingCycle})",
+                  "• ${s.title} — ₹${s.amount.toStringAsFixed(0)} (${_cycleDisplayLabel(s)})",
             )
             .join("\n");
-        return "$displayCat subscriptions (Total: ₹${total.toStringAsFixed(0)}):\n$list";
+        return "$displayCat items (Total: ₹${total.toStringAsFixed(0)}):\n$list";
 
       case 'by_name':
         final rawName = (queryData['subscription_name'] as String? ?? '')
@@ -185,43 +202,41 @@ class SubscriptionQueryService {
             (s) => s.isPaused && s.title.toLowerCase().contains(needle),
           );
           if (pausedMatch) {
-            return "You don't have an active subscription matching \"$rawName\" (a matching paused subscription exists).";
+            return "You don't have an active item matching \"$rawName\" (a matching paused item exists).";
           }
-          return "You don't have an active subscription matching \"$rawName\".";
+          return "You don't have an active subscription or unpaid bill matching \"$rawName\".";
         }
 
         if (matches.length == 1) {
           final s = matches.first;
-          final trialTag = s.isFreeTrial ? " • Free Trial" : "";
-          final intervalInfo =
-              s.billingCycle.toUpperCase() == 'CUSTOM' &&
-                  (s.customIntervalDays ?? 0) > 0
-              ? "CUSTOM (${s.customIntervalDays} days)"
-              : s.billingCycle;
-          return "${s.title} — ₹${s.amount.toStringAsFixed(0)} ($intervalInfo$trialTag, Next due: ${dateFormatter.format(s.nextDueDate)})";
+          final trialTag = (!s.isOneTimeBill && s.isFreeTrial)
+              ? " • Free Trial"
+              : "";
+          final duePrefix = s.isOneTimeBill ? "Pay by" : "Next due";
+          return "${s.title} — ₹${s.amount.toStringAsFixed(0)} (${_cycleDisplayLabel(s)}$trialTag, $duePrefix: ${dateFormatter.format(s.nextDueDate)})";
         }
 
         final total = matches.fold<double>(0, (sum, s) => sum + s.amount);
         final list = matches
             .map(
               (s) =>
-                  "• ${s.title} — ₹${s.amount.toStringAsFixed(0)} (${s.billingCycle}, Due: ${dateFormatter.format(s.nextDueDate)})",
+                  "• ${s.title} — ₹${s.amount.toStringAsFixed(0)} (${_cycleDisplayLabel(s)}, Due: ${dateFormatter.format(s.nextDueDate)})",
             )
             .join("\n");
-        return "Subscriptions matching \"$rawName\" (Total: ₹${total.toStringAsFixed(0)}):\n$list";
+        return "Items matching \"$rawName\" (Total: ₹${total.toStringAsFixed(0)}):\n$list";
 
       case 'all_active':
       default:
         if (activeSubs.isEmpty) {
-          return "You have no active subscriptions.";
+          return "You have no active subscriptions or unpaid bills.";
         }
         final list = activeSubs
             .map(
               (s) =>
-                  "• ${s.title} — ₹${s.amount.toStringAsFixed(0)} (Due: ${dateFormatter.format(s.nextDueDate)})",
+                  "• ${s.title}${s.isOneTimeBill ? ' (One-Time)' : ''} — ₹${s.amount.toStringAsFixed(0)} (Due: ${dateFormatter.format(s.nextDueDate)})",
             )
             .join("\n");
-        return "Your active subscriptions (${activeSubs.length}):\n$list";
+        return "Your active subscriptions & bills (${activeSubs.length}):\n$list";
     }
   }
 }

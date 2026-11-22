@@ -58,24 +58,23 @@ class SubscriptionRepository {
 
   DateTime calculateNextDueDate(
     DateTime currentDueDate,
-    String billingCycle,
+    String? billingCycle,
     int? customDays,
   ) {
-    if (billingCycle == 'MONTHLY') {
+    final cycle = (billingCycle ?? 'MONTHLY').trim().toUpperCase();
+    if (cycle == 'MONTHLY') {
       return DateTime(
         currentDueDate.year,
         currentDueDate.month + 1,
         currentDueDate.day,
       );
-    } else if (billingCycle == 'YEARLY') {
+    } else if (cycle == 'YEARLY') {
       return DateTime(
         currentDueDate.year + 1,
         currentDueDate.month,
         currentDueDate.day,
       );
-    } else if (billingCycle == 'CUSTOM' &&
-        customDays != null &&
-        customDays > 0) {
+    } else if (cycle == 'CUSTOM' && customDays != null && customDays > 0) {
       return currentDueDate.add(Duration(days: customDays));
     }
     return currentDueDate.add(const Duration(days: 30));
@@ -84,6 +83,10 @@ class SubscriptionRepository {
   Future<void> markAsPaid(String id) async {
     final subscription = _box.get(id);
     if (subscription != null) {
+      final billingLabel = subscription.isOneTimeBill
+          ? 'ONE_TIME'
+          : (subscription.billingCycle ?? 'MONTHLY').toUpperCase();
+
       // 1. Record Audit Log in payment_logs
       final log = PaymentLog(
         id: const Uuid().v4(),
@@ -91,21 +94,26 @@ class SubscriptionRepository {
         title: subscription.title,
         amountPaid: subscription.amount,
         paidAt: DateTime.now(),
-        billingPeriod: DateFormat('MMMM_yyyy')
-            .format(DateTime.now())
-            .toUpperCase(),
+        billingPeriod:
+            '${DateFormat('MMMM_yyyy').format(DateTime.now()).toUpperCase()}_$billingLabel',
       );
       await _logBox.put(log.id, log);
 
-      // 2. Advance Next Due Date
-      subscription.nextDueDate = calculateNextDueDate(
-        subscription.nextDueDate,
-        subscription.billingCycle,
-        subscription.customIntervalDays,
-      );
+      // 2. For one-time bills, mark paid without advancing due date;
+      //    for recurring subscriptions, advance nextDueDate to next cycle.
+      if (subscription.isOneTimeBill) {
+        subscription.isPaid = true;
+      } else {
+        subscription.nextDueDate = calculateNextDueDate(
+          subscription.nextDueDate,
+          subscription.billingCycle,
+          subscription.customIntervalDays,
+        );
+        subscription.isPaid = false;
+      }
       await subscription.save();
 
-      // 3. Sync Updated Subscription to Cloud
+      // 3. Sync Updated Record to Cloud
       await _syncService.syncSubscription(subscription);
     }
   }

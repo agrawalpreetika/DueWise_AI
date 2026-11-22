@@ -18,19 +18,21 @@ final selectedMonthProvider = StateProvider<DateTime>((ref) {
   return DateTime(now.year, now.month, 1);
 });
 
-// 1. Provider to filter subscriptions for the selected month & year
+// 1. Provider to filter active unpaid items for the selected month & year
 final currentMonthSubscriptionsProvider = Provider<List<Subscription>>((ref) {
   final subscriptions = ref.watch(subscriptionProvider);
   final selectedDate = ref.watch(selectedMonthProvider);
 
   return subscriptions.where((sub) {
-    return sub.nextDueDate.year == selectedDate.year &&
-        sub.nextDueDate.month == selectedDate.month &&
-        !sub.isPaused;
+    final matchesMonth =
+        sub.nextDueDate.year == selectedDate.year &&
+        sub.nextDueDate.month == selectedDate.month;
+    final isActiveUnpaid = !sub.isPaused && !(sub.isOneTimeBill && sub.isPaid);
+    return matchesMonth && isActiveUnpaid;
   }).toList();
 });
 
-// 2. Provider to calculate the total amount of pending bills for the selected month
+// 2. Provider to calculate the total amount of pending bills/subscriptions for the selected month
 final currentMonthTotalProvider = Provider<double>((ref) {
   final monthSubs = ref.watch(currentMonthSubscriptionsProvider);
   return monthSubs.fold(0.0, (sum, sub) => sum + sub.amount);
@@ -54,13 +56,15 @@ class SubscriptionNotifier extends StateNotifier<List<Subscription>> {
 
   Future<void> _fetchAndSyncFromCloud(String userId) async {
     try {
-      // 1. Fetch Subscriptions from Cloud
+      // 1. Fetch Subscriptions / Bills from Cloud
       final cloudSubs = await _firestoreSync.fetchCloudSubscriptions();
       if (cloudSubs.isNotEmpty) {
         await _box.clear();
         for (var sub in cloudSubs) {
           await _box.put(sub.id, sub);
-          await _notificationService.scheduleSubscriptionReminders(sub);
+          if (!sub.isPaused && !(sub.isOneTimeBill && sub.isPaid)) {
+            await _notificationService.scheduleSubscriptionReminders(sub);
+          }
         }
         state = _box.values.toList();
       }
@@ -69,7 +73,6 @@ class SubscriptionNotifier extends StateNotifier<List<Subscription>> {
       final cloudLogs = await _firestoreSync.fetchRecentPaymentLogs();
       if (cloudLogs.isNotEmpty) {
         try {
-          // Check if box is open, if not open it safely
           var logBox = Hive.isBoxOpen('payment_logs')
               ? Hive.box<PaymentLog>('payment_logs')
               : await Hive.openBox<PaymentLog>('payment_logs');
@@ -100,9 +103,11 @@ class SubscriptionNotifier extends StateNotifier<List<Subscription>> {
   Future<void> updateSubscription(Subscription updatedSub) async {
     await _box.put(updatedSub.id, updatedSub);
 
-    // Clear old reminders and schedule fresh ones on update
     await _notificationService.cancelSubscriptionReminders(updatedSub.id);
-    await _notificationService.scheduleSubscriptionReminders(updatedSub);
+    if (!updatedSub.isPaused &&
+        !(updatedSub.isOneTimeBill && updatedSub.isPaid)) {
+      await _notificationService.scheduleSubscriptionReminders(updatedSub);
+    }
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -114,7 +119,10 @@ class SubscriptionNotifier extends StateNotifier<List<Subscription>> {
 
   Future<void> addSubscription(Subscription subscription) async {
     await _box.put(subscription.id, subscription);
-    await _notificationService.scheduleSubscriptionReminders(subscription);
+    if (!subscription.isPaused &&
+        !(subscription.isOneTimeBill && subscription.isPaid)) {
+      await _notificationService.scheduleSubscriptionReminders(subscription);
+    }
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -134,46 +142,80 @@ class SubscriptionNotifier extends StateNotifier<List<Subscription>> {
         title: sub.title,
         amountPaid: sub.amount,
         paidAt: now,
-        billingPeriod: sub.billingCycle,
+        billingPeriod: sub.effectiveBillingLabel,
       );
 
       try {
-        final logBox = Hive.box<PaymentLog>('payment_logs');
+        final logBox = Hive.isBoxOpen('payment_logs')
+            ? Hive.box<PaymentLog>('payment_logs')
+            : await Hive.openBox<PaymentLog>('payment_logs');
         await logBox.put(paymentLog.id, paymentLog);
       } catch (e) {
         print('Hive log write error: $e');
       }
 
-      DateTime nextDate = Subscription.calculateNextDueDate(
-        sub.nextDueDate,
-        sub.billingCycle,
-        intervalDays: sub.customIntervalDays,
-      );
+      if (sub.isOneTimeBill) {
+        // One-time bill: mark paid, keep dueDate unchanged, cancel pending reminders
+        final paidBill = Subscription(
+          id: sub.id,
+          title: sub.title,
+          amount: sub.amount,
+          currency: sub.currency,
+          category: sub.category,
+          billingCycle: null,
+          customIntervalDays: null,
+          startDate: null,
+          nextDueDate: sub.nextDueDate,
+          isFreeTrial: false,
+          trialEndDate: null,
+          isPaused: sub.isPaused,
+          entryType: 'one_time_bill',
+          isPaid: true,
+        );
 
-      final updatedSub = Subscription(
-        id: sub.id,
-        title: sub.title,
-        amount: sub.amount,
-        category: sub.category,
-        billingCycle: sub.billingCycle,
-        startDate: sub.startDate,
-        nextDueDate: nextDate,
-        customIntervalDays: sub.customIntervalDays,
-        isFreeTrial: false,
-        trialEndDate: sub.trialEndDate,
-        isPaused: sub.isPaused,
-      );
+        await _box.put(sub.id, paidBill);
+        await _notificationService.cancelSubscriptionReminders(paidBill.id);
 
-      await _box.put(sub.id, updatedSub);
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await _firestoreSync.syncSubscription(paidBill);
+          await _firestoreSync.savePaymentLog(user.uid, paymentLog);
+        }
+      } else {
+        // Recurring subscription: advance nextDueDate to next cycle
+        final DateTime nextDate = Subscription.calculateNextDueDate(
+          sub.nextDueDate,
+          sub.billingCycle,
+          intervalDays: sub.customIntervalDays,
+        );
 
-      // Cancel previous cycle reminders and set up for the next billing cycle
-      await _notificationService.cancelSubscriptionReminders(updatedSub.id);
-      await _notificationService.scheduleSubscriptionReminders(updatedSub);
+        final updatedSub = Subscription(
+          id: sub.id,
+          title: sub.title,
+          amount: sub.amount,
+          currency: sub.currency,
+          category: sub.category,
+          billingCycle: sub.billingCycle ?? 'MONTHLY',
+          startDate: sub.startDate,
+          nextDueDate: nextDate,
+          customIntervalDays: sub.customIntervalDays,
+          isFreeTrial: false,
+          trialEndDate: sub.trialEndDate,
+          isPaused: sub.isPaused,
+          entryType: sub.entryType,
+          isPaid: false,
+        );
 
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await _firestoreSync.syncSubscription(updatedSub);
-        await _firestoreSync.savePaymentLog(user.uid, paymentLog);
+        await _box.put(sub.id, updatedSub);
+
+        await _notificationService.cancelSubscriptionReminders(updatedSub.id);
+        await _notificationService.scheduleSubscriptionReminders(updatedSub);
+
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await _firestoreSync.syncSubscription(updatedSub);
+          await _firestoreSync.savePaymentLog(user.uid, paymentLog);
+        }
       }
 
       state = _box.values.toList();
@@ -187,6 +229,7 @@ class SubscriptionNotifier extends StateNotifier<List<Subscription>> {
         id: sub.id,
         title: sub.title,
         amount: sub.amount,
+        currency: sub.currency,
         category: sub.category,
         billingCycle: sub.billingCycle,
         startDate: sub.startDate,
@@ -195,11 +238,14 @@ class SubscriptionNotifier extends StateNotifier<List<Subscription>> {
         isFreeTrial: sub.isFreeTrial,
         trialEndDate: sub.trialEndDate,
         isPaused: !sub.isPaused,
+        entryType: sub.entryType,
+        isPaid: sub.isPaid,
       );
 
       await _box.put(id, updatedSub);
 
-      if (updatedSub.isPaused) {
+      if (updatedSub.isPaused ||
+          (updatedSub.isOneTimeBill && updatedSub.isPaid)) {
         await _notificationService.cancelSubscriptionReminders(id);
       } else {
         await _notificationService.scheduleSubscriptionReminders(updatedSub);

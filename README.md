@@ -11,7 +11,7 @@
 
 Chat naturally in plain English to add subscriptions or inspect your bills without navigating through multiple screens.
 
-- **Add Subscriptions via Chat (`add_subscription`):** Create new subscriptions using natural language. The assistant extracts the title, amount, billing cycle (`MONTHLY`, `YEARLY`, or `CUSTOM` interval in days), start date, and category (`Entertainment`, `Utility`, `Software`, `Gym`, `Insurance`, `Education`, `Other`).
+- **Add Subscriptions via Chat (`add_subscription`):** Create new subscriptions using natural language. The assistant extracts the title, amount, billing cycle (`MONTHLY`, `YEARLY`, or `CUSTOM` interval in days), start date, and category (`Entertainment`, `Utilities`, `Software`, `Gym`, `Insurance`, `Education`, `Other`).
 
 - **Query Bills & Expenses via Chat (`query_subscriptions`):** Ask questions about your existing subscriptions and receive answers based on your subscription data.
 

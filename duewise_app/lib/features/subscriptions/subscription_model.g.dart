@@ -22,20 +22,22 @@ class SubscriptionAdapter extends TypeAdapter<Subscription> {
       category: fields[2] as String,
       amount: fields[3] as double,
       currency: fields[4] as String,
-      billingCycle: fields[5] as String,
+      billingCycle: fields[5] as String?,
       customIntervalDays: fields[6] as int?,
-      startDate: fields[7] as DateTime,
+      startDate: fields[7] as DateTime?,
       nextDueDate: fields[8] as DateTime,
       isFreeTrial: fields[9] as bool,
       trialEndDate: fields[10] as DateTime?,
       isPaused: fields[11] as bool,
+      entryType: fields[12] as String,
+      isPaid: fields[13] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, Subscription obj) {
     writer
-      ..writeByte(12)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -59,7 +61,11 @@ class SubscriptionAdapter extends TypeAdapter<Subscription> {
       ..writeByte(10)
       ..write(obj.trialEndDate)
       ..writeByte(11)
-      ..write(obj.isPaused);
+      ..write(obj.isPaused)
+      ..writeByte(12)
+      ..write(obj.entryType)
+      ..writeByte(13)
+      ..write(obj.isPaid);
   }
 
   @override

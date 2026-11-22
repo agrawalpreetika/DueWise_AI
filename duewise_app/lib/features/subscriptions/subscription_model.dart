@@ -11,7 +11,7 @@ class Subscription extends HiveObject {
   final String title;
 
   @HiveField(2)
-  final String category; // e.g., "Entertainment", "Utilities", "Software", "Gym"
+  final String category; // e.g., "Entertainment", "Utility", "Software", "Gym"
 
   @HiveField(3)
   final double amount;
@@ -20,16 +20,16 @@ class Subscription extends HiveObject {
   final String currency; // "INR", "USD", etc.
 
   @HiveField(5)
-  final String billingCycle; // "MONTHLY", "YEARLY", "CUSTOM"
+  final String? billingCycle; // "MONTHLY", "YEARLY", "CUSTOM", or null for one-time bills
 
   @HiveField(6)
   final int? customIntervalDays;
 
   @HiveField(7)
-  final DateTime startDate;
+  final DateTime? startDate; // null for one-time bills
 
   @HiveField(8)
-  DateTime nextDueDate;
+  DateTime nextDueDate; // For one-time bills, this is the "pay by" due date
 
   @HiveField(9)
   final bool isFreeTrial;
@@ -40,35 +40,50 @@ class Subscription extends HiveObject {
   @HiveField(11)
   bool isPaused;
 
+  @HiveField(12)
+  final String entryType; // "subscription" or "one_time_bill"
+
+  @HiveField(13)
+  bool isPaid; // Mainly used for one-time bills once paid
+
   Subscription({
     required this.id,
     required this.title,
     required this.category,
     required this.amount,
     this.currency = 'INR',
-    required this.billingCycle,
+    this.billingCycle,
     this.customIntervalDays,
-    required this.startDate,
+    this.startDate,
     required this.nextDueDate,
     this.isFreeTrial = false,
     this.trialEndDate,
     this.isPaused = false,
+    this.entryType = 'subscription',
+    this.isPaid = false,
   });
+
+  bool get isOneTimeBill => entryType.trim().toLowerCase() == 'one_time_bill';
+
+  String get effectiveBillingLabel {
+    if (isOneTimeBill) return 'ONE_TIME';
+    return (billingCycle ?? 'MONTHLY').trim().toUpperCase();
+  }
 
   // Helper static function to auto-calculate next due date cleanly
   static DateTime calculateNextDueDate(
-    DateTime start,
-    String cycle, {
+    DateTime anchorDate,
+    String? cycle, {
     int? intervalDays,
   }) {
-    final c = cycle.trim().toUpperCase();
+    final c = (cycle ?? 'MONTHLY').trim().toUpperCase();
     if (c == 'MONTHLY') {
-      return DateTime(start.year, start.month + 1, start.day);
+      return DateTime(anchorDate.year, anchorDate.month + 1, anchorDate.day);
     } else if (c == 'YEARLY') {
-      return DateTime(start.year + 1, start.month, start.day);
+      return DateTime(anchorDate.year + 1, anchorDate.month, anchorDate.day);
     } else if (c == 'CUSTOM' && intervalDays != null && intervalDays > 0) {
-      return start.add(Duration(days: intervalDays));
+      return anchorDate.add(Duration(days: intervalDays));
     }
-    return start.add(const Duration(days: 30)); // Fallback
+    return anchorDate.add(const Duration(days: 30)); // Fallback
   }
 }
